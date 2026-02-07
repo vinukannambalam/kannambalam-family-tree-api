@@ -287,6 +287,33 @@ app.get("/api/family/family", async (req, res) => {
   }
 });
 
+app.get("/api/family/lineage/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+
+    const { rows } = await pool.query(`
+      WITH RECURSIVE ancestors AS (
+        SELECT id, full_name, father_id, mother_id
+        FROM kannambalam_family
+        WHERE id = $1
+
+        UNION ALL
+
+        SELECT p.id, p.full_name, p.father_id, p.mother_id
+        FROM kannambalam_family p
+        JOIN ancestors a 
+          ON p.id = a.father_id OR p.id = a.mother_id
+      )
+      SELECT * FROM ancestors;
+    `, [id]);
+
+    res.json(rows.reverse()); // root → person
+  } catch (e) {
+    console.error("Lineage error", e);
+    res.status(500).json({ error: "Failed to fetch lineage" });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
