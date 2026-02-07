@@ -175,6 +175,86 @@ app.get("/api/family/search", async (req, res) => {
   }
 });
 
+app.get("/api/family/family", async (req, res) => {
+  try {
+    const personId = parseInt(req.query.person_id, 10);
+
+    if (!personId) {
+      return res.status(400).json({ error: "person_id is required" });
+    }
+
+    const personResult = await pool.query(`
+      SELECT
+        p.id,
+        p.full_name,
+        p.nick_name,
+        p.gender,
+        p.dob,
+        p.dod,
+        p.phone_no,
+        p.alternate_phone,
+        p.occupation,
+        p.current_loc,
+        p.marital_status,
+        p.generation,
+        p.is_alive,
+        p.photo_url,
+        p.birth_star,
+        p.malayalam_month,
+
+        s.id AS spouse_id,
+        s.full_name AS spouse_name,
+        s.photo_url AS spouse_photo_url
+      FROM kannambalam_family p
+      LEFT JOIN kannambalam_family s 
+        ON s.id = p.spouse_id
+      WHERE p.id = $1
+      LIMIT 1
+    `, [personId]);
+
+    const person = personResult.rows[0] || null;
+
+    if (!person) {
+      return res.json({ person: null, children: [] });
+    }
+
+    const childrenResult = await pool.query(`
+      SELECT
+        id,
+        full_name,
+        nick_name,
+        gender,
+        dob,
+        dod,
+        phone_no,
+        alternate_phone,
+        occupation,
+        current_loc,
+        marital_status,
+        generation,
+        is_alive,
+        photo_url,
+        birth_star,
+        malayalam_month,
+        father_id,
+        mother_id
+      FROM kannambalam_family
+      WHERE 
+        father_id = $1 
+        OR mother_id = $1
+      ORDER BY order_id NULLS LAST, id
+    `, [personId]);
+
+    const children = (childrenResult.rows || []).filter(
+      c => c.id !== person.spouse_id
+    );
+
+    res.json({ person, children });
+  } catch (err) {
+    console.error("Error in /api/family/family", err);
+    res.status(500).json({ error: "Failed to fetch family" });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 
