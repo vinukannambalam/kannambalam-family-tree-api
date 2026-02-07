@@ -100,10 +100,48 @@ app.get("/api/family/children/:id", async (req, res) => {
 app.get("/api/family/search", async (req, res) => {
   try {
     const q = (req.query.q || "").trim();
+    const field = (req.query.field || "all").toLowerCase();
+    const alive = (req.query.alive || "all").toLowerCase();
 
-    if (!q) {
+    if (!q && alive === "all") {
       return res.json([]);
     }
+
+    let where = [];
+    let params = [];
+    let i = 1;
+
+    if (q) {
+      if (field === "name") {
+        where.push(`full_name ILIKE '%' || $${i} || '%'`);
+        params.push(q);
+        i++;
+      } else if (field === "star") {
+        where.push(`birth_star ILIKE '%' || $${i} || '%'`);
+        params.push(q);
+        i++;
+      } else if (field === "month") {
+        where.push(`malayalam_month ILIKE '%' || $${i} || '%'`);
+        params.push(q);
+        i++;
+      } else {
+        where.push(`(
+          full_name ILIKE '%' || $${i} || '%' OR
+          birth_star ILIKE '%' || $${i} || '%' OR
+          malayalam_month ILIKE '%' || $${i} || '%'
+        )`);
+        params.push(q);
+        i++;
+      }
+    }
+
+    if (alive === "true") {
+      where.push(`is_alive = true`);
+    } else if (alive === "false") {
+      where.push(`is_alive = false`);
+    }
+
+    const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
 
     const { rows } = await pool.query(`
       SELECT
@@ -124,18 +162,11 @@ app.get("/api/family/search", async (req, res) => {
         birth_star,
         malayalam_month
       FROM kannambalam_family
-      WHERE
-        full_name ILIKE '%' || $1 || '%'
-        OR birth_star ILIKE '%' || $1 || '%'
-        OR malayalam_month ILIKE '%' || $1 || '%'
+      ${whereSql}
       ORDER BY
-        CASE
-          WHEN full_name ILIKE $1 || '%' THEN 1
-          ELSE 2
-        END,
         full_name
       LIMIT 50
-    `, [q]);
+    `, params);
 
     res.json(rows);
   } catch (err) {
@@ -143,6 +174,7 @@ app.get("/api/family/search", async (req, res) => {
     res.status(500).json({ error: "Search failed" });
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 
