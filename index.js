@@ -204,7 +204,9 @@ app.get("/api/family/family", async (req, res) => {
 
         s.id AS spouse_id,
         s.full_name AS spouse_name,
-        s.photo_url AS spouse_photo_url
+        s.photo_url AS spouse_photo_url,
+		s.birth_star,
+		s.malayalam_month
       FROM kannambalam_family p
       LEFT JOIN kannambalam_family s 
         ON s.id = p.spouse_id
