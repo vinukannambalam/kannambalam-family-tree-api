@@ -25,30 +25,14 @@ app.get("/api/family/roots", async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT
-        p.id,
-        p.full_name,
-        p.nick_name,
-        p.gender,
-        p.dob,
-        p.dod,
-        p.phone_no,
-        p.alternate_phone,
-        p.occupation,
-        p.current_loc,
-        p.marital_status,
-        p.generation,
-        p.is_alive,
-        p.photo_url,
-        p.birth_star,
-        p.malayalam_month,
-
-        s.id AS spouse_id,
-        s.full_name AS spouse_name,
-        s.photo_url AS spouse_photo_url
-
+        p.id, p.full_name, p.nick_name, p.gender, p.dob, p.dod, p.phone_no, p.alternate_phone,
+        p.occupation, p.current_loc, p.marital_status, p.generation, p.is_alive, p.photo_url,
+        p.birth_star, p.malayalam_month, 
+        s.id AS spouse_id, s.full_name, s.nick_name, s.gender, s.dob, s.dod, s.phone_no, 
+		s.alternate_phone, s.occupation, s.current_loc, s.marital_status, s.generation, s.is_alive, 
+		s.photo_url, s.birth_star, s.malayalam_month
       FROM kannambalam_family p
-      LEFT JOIN kannambalam_family s 
-        ON s.id = p.spouse_id
+      LEFT JOIN kannambalam_family s ON s.id = p.spouse_id
       WHERE p.is_root = true
       ORDER BY p.order_id NULLS LAST, p.id
     `);
@@ -66,27 +50,11 @@ app.get("/api/family/children/:id", async (req, res) => {
 
     const { rows } = await pool.query(`
       SELECT
-        id,
-        full_name,
-        nick_name,
-        gender,
-        dob,
-        dod,
-        phone_no,
-        alternate_phone,
-        occupation,
-        current_loc,
-        marital_status,
-        generation,
-        is_alive,
-        photo_url,
-        birth_star,
-        malayalam_month,
-        father_id,
-        mother_id
+        id, full_name, nick_name, gender, dob, dod, phone_no, alternate_phone, occupation,
+        current_loc, marital_status, generation, is_alive, photo_url, birth_star,
+        malayalam_month, father_id, mother_id 
       FROM kannambalam_family
-      WHERE father_id = $1
-         OR mother_id = $1
+      WHERE father_id = $1 OR mother_id = $1
       ORDER BY order_id NULLS LAST, id
     `, [id]);
 
@@ -145,27 +113,14 @@ app.get("/api/family/search", async (req, res) => {
 
     const { rows } = await pool.query(`
       SELECT
-        id,
-        full_name,
-        nick_name,
-        gender,
-        dob,
-        dod,
-        phone_no,
-        alternate_phone,
-        occupation,
-        current_loc,
-        marital_status,
-        generation,
-        is_alive,
-        photo_url,
-        birth_star,
+        id, full_name, nick_name, gender, dob, dod, phone_no, alternate_phone, occupation,
+        current_loc, marital_status, generation, is_alive, photo_url, birth_star,
         malayalam_month
       FROM kannambalam_family
       ${whereSql}
       ORDER BY
         full_name
-      LIMIT 50
+      LIMIT 250
     `, params);
 
     res.json(rows);
@@ -185,29 +140,12 @@ app.get("/api/family/family", async (req, res) => {
 
     const personResult = await pool.query(`
       SELECT
-        p.id,
-        p.full_name,
-        p.nick_name,
-        p.gender,
-        p.dob,
-        p.dod,
-        p.phone_no,
-        p.alternate_phone,
-        p.occupation,
-        p.current_loc,
-        p.marital_status,
-        p.generation,
-        p.is_alive,
-        p.photo_url,
-        p.birth_star,
-        p.malayalam_month,
-
-        s.id AS spouse_id,
-        s.full_name AS spouse_name,
-        s.photo_url AS spouse_photo_url,
-		s.birth_star,
-		s.malayalam_month,
-		s.is_alive
+        p.id, p.full_name, p.nick_name, p.gender, p.dob, p.dod, p.phone_no, p.alternate_phone,
+        p.occupation, p.current_loc, p.marital_status, p.generation, p.is_alive, p.photo_url,
+        p.birth_star, p.malayalam_month, 
+        s.id AS spouse_id, s.full_name, s.nick_name, s.gender, s.dob, s.dod, s.phone_no, 
+		s.alternate_phone, s.occupation, s.current_loc, s.marital_status, s.generation, 
+		s.is_alive, s.photo_url, s.birth_star, s.malayalam_month
       FROM kannambalam_family p
       LEFT JOIN kannambalam_family s 
         ON s.id = p.spouse_id
@@ -223,24 +161,9 @@ app.get("/api/family/family", async (req, res) => {
 
     const childrenResult = await pool.query(`
       SELECT
-        id,
-        full_name,
-        nick_name,
-        gender,
-        dob,
-        dod,
-        phone_no,
-        alternate_phone,
-        occupation,
-        current_loc,
-        marital_status,
-        generation,
-        is_alive,
-        photo_url,
-        birth_star,
-        malayalam_month,
-        father_id,
-        mother_id
+        id, full_name, nick_name, gender, dob, dod, phone_no, alternate_phone, occupation,
+        current_loc, marital_status, generation, is_alive, photo_url, birth_star,
+        malayalam_month, father_id, mother_id 
       FROM kannambalam_family
       WHERE 
         father_id = $1 
