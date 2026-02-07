@@ -97,6 +97,53 @@ app.get("/api/family/children/:id", async (req, res) => {
   }
 });
 
+app.get("/api/family/search", async (req, res) => {
+  try {
+    const q = (req.query.q || "").trim();
+
+    if (!q) {
+      return res.json([]);
+    }
+
+    const { rows } = await pool.query(`
+      SELECT
+        id,
+        full_name,
+        nick_name,
+        gender,
+        dob,
+        dod,
+        phone_no,
+        alternate_phone,
+        occupation,
+        current_loc,
+        marital_status,
+        generation,
+        is_alive,
+        photo_url,
+        birth_star,
+        malayalam_month
+      FROM kannambalam_family
+      WHERE
+        full_name ILIKE '%' || $1 || '%'
+        OR birth_star ILIKE '%' || $1 || '%'
+        OR malayalam_month ILIKE '%' || $1 || '%'
+      ORDER BY
+        CASE
+          WHEN full_name ILIKE $1 || '%' THEN 1
+          ELSE 2
+        END,
+        full_name
+      LIMIT 50
+    `, [q]);
+
+    res.json(rows);
+  } catch (err) {
+    console.error("Error in /api/family/search", err);
+    res.status(500).json({ error: "Search failed" });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
