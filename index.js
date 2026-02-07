@@ -111,15 +111,13 @@ app.get("/api/family/search", async (req, res) => {
     const q = (req.query.q || "").trim();
     const field = (req.query.field || "all").toLowerCase();
     const alive = (req.query.alive || "all").toLowerCase();
-
-    if (!q && alive === "all") {
-      return res.json([]);
-    }
+    const gen = req.query.gen ? parseInt(req.query.gen, 10) : null;
 
     let where = [];
     let params = [];
     let i = 1;
 
+    // Text search
     if (q) {
       if (field === "name") {
         where.push(`full_name ILIKE '%' || $${i} || '%'`);
@@ -144,10 +142,23 @@ app.get("/api/family/search", async (req, res) => {
       }
     }
 
+    // Alive filter
     if (alive === "true") {
       where.push(`is_alive = true`);
     } else if (alive === "false") {
       where.push(`is_alive = false`);
+    }
+
+    // Generation filter
+    if (Number.isInteger(gen)) {
+      where.push(`generation = $${i}`);
+      params.push(gen);
+      i++;
+    }
+
+    // If no filters at all → return empty (prevent full table scan)
+    if (!q && alive === "all" && !Number.isInteger(gen)) {
+      return res.json([]);
     }
 
     const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
@@ -155,25 +166,24 @@ app.get("/api/family/search", async (req, res) => {
     const { rows } = await pool.query(`
       SELECT
         id, 
-		full_name, 
-		nick_name, 
-		gender, 
-		dob, 
-		dod, 
-		phone_no, 
-		alternate_phone, 
-		occupation,
+        full_name, 
+        nick_name, 
+        gender, 
+        dob, 
+        dod, 
+        phone_no, 
+        alternate_phone, 
+        occupation,
         current_loc, 
-		marital_status, 
-		generation, 
-		is_alive, 
-		photo_url, 
-		birth_star,
+        marital_status, 
+        generation, 
+        is_alive, 
+        photo_url, 
+        birth_star,
         malayalam_month
       FROM kannambalam_family
       ${whereSql}
-      ORDER BY
-        full_name
+      ORDER BY full_name
       LIMIT 250
     `, params);
 
@@ -183,6 +193,7 @@ app.get("/api/family/search", async (req, res) => {
     res.status(500).json({ error: "Search failed" });
   }
 });
+
 
 app.get("/api/family/family", async (req, res) => {
   try {
