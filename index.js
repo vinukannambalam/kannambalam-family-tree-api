@@ -92,7 +92,7 @@ app.get("/api/family/search", async (req, res) => {
     // Text search
     if (q) {
       if (field === "name") {
-        where.push(`full_name ILIKE '%' || $${i} || '%'`);
+        where.push(`k.full_name ILIKE '%' || $${i} || '%'`);
         params.push(q);
         i++;
       } else if (field === "star") {
@@ -105,7 +105,7 @@ app.get("/api/family/search", async (req, res) => {
         i++;
       } else {
         where.push(`(
-          full_name ILIKE '%' || $${i} || '%' OR
+          k.full_name ILIKE '%' || $${i} || '%' OR
           b.name_en ILIKE '%' || $${i} || '%' OR
           m.name_en ILIKE '%' || $${i} || '%'
         )`);
@@ -116,14 +116,14 @@ app.get("/api/family/search", async (req, res) => {
 
     // Alive filter
     if (alive === "true") {
-      where.push(`is_alive = true`);
+      where.push(`k.is_alive = true`);
     } else if (alive === "false") {
-      where.push(`is_alive = false`);
+      where.push(`k.is_alive = false`);
     }
 
     // Generation filter
     if (Number.isInteger(gen)) {
-      where.push(`generation = $${i}`);
+      where.push(`k.generation = $${i}`);
       params.push(gen);
       i++;
     }
