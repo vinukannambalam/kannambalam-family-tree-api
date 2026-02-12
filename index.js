@@ -41,8 +41,6 @@ app.get("/api/family/roots", async (req, res) => {
 		p.photo_url,
         b1.name_en AS birth_star, 
 		m1.name_en AS malayalam_month, 
-        p.birth_star, 
-		p.malayalam_month, 
         s.id AS spouse_id, 
 		s.full_name AS spouse_name, 
 		s.nick_name AS spouse_nick_name, 
@@ -65,8 +63,6 @@ app.get("/api/family/roots", async (req, res) => {
 	  LEFT JOIN malayalam_month m1 ON m1.id=p.malayalam_month_id	
       LEFT JOIN birth_star b2 ON b2.id=s.birth_star_id
 	  LEFT JOIN malayalam_month m2 ON m2.id=s.malayalam_month_id	  
-		s.birth_star AS spouse_birth_star, 
-		s.malayalam_month AS spouse_malayalam_month
       FROM kannambalam_family p
       LEFT JOIN kannambalam_family s ON s.id = p.spouse_id
       WHERE p.is_root = true
@@ -109,27 +105,6 @@ app.get("/api/family/children/:id", async (req, res) => {
 	  LEFT JOIN malayalam_month m ON m.id=k.malayalam_month_id
       WHERE k.father_id = $1 OR k.mother_id = $1
       ORDER BY k.order_id NULLS LAST, k.id
-        id, 
-		full_name, 
-		nick_name, 
-		gender, 
-		dob, 
-		dod, 
-		phone_no, 
-		alternate_phone, 
-		occupation,
-        current_loc, 
-		marital_status, 
-		generation, 
-		is_alive, 
-		photo_url, 
-		birth_star,
-        malayalam_month, 
-		father_id, 
-		mother_id 
-      FROM kannambalam_family
-      WHERE father_id = $1 OR mother_id = $1
-      ORDER BY order_id NULLS LAST, id
     `, [id]);
 
     res.json(rows);
