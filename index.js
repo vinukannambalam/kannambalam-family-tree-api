@@ -18,7 +18,7 @@ const pool = new Pool({
 });
 
 app.get("/", (req, res) => {
-  res.send("Family Tree API is running 🚀 (auto-deployed)");
+  res.send("Testing");
 });
 
 app.get("/api/family/roots", async (req, res) => {
