@@ -3,6 +3,7 @@ const cors = require("cors");
 const { Pool } = require("pg");
 
 const app = express();
+console.log("🚀 CI/CD test: Kannambalam API deployed at", new Date().toISOString());
 
 app.use(cors({
   origin: "*",
