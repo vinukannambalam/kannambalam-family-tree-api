@@ -4,7 +4,6 @@ const { Pool } = require("pg");
 
 const app = express();
 
-
 app.use(cors({
   origin: "*",
   methods: ["GET"],
@@ -19,7 +18,7 @@ const pool = new Pool({
 });
 
 app.get("/", (req, res) => {
-  res.send("Family Tree API is running");
+  res.send("Family Tree API is running 🚀 (auto-deployed)");
 });
 
 app.get("/api/family/roots", async (req, res) => {
