@@ -25,54 +25,26 @@ app.get("/api/family/roots", async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT
-        p.id, 
-        p.full_name, 
-        p.nick_name, 
-        p.gender, 
-        p.dob, 
-        p.dod, 
-        p.phone_no, 
-        p.alternate_phone,
-        p.occupation, 
-        p.current_loc, 
-        p.marital_status, 
-        p.generation, 
-        p.is_alive, 
-        p.photo_url,
-        b1.name_en AS birth_star, 
-        m1.name_en AS malayalam_month, 
-        s.id AS spouse_id, 
-        s.full_name AS spouse_name, 
-        s.nick_name AS spouse_nick_name, 
-        s.gender AS spouse_gender, 
-        s.dob AS spouse_dob, 
-        s.dod AS spouse_dod, 
-        s.phone_no AS spouse_phone_no, 
-        s.alternate_phone AS spouse_alternate_phone, 
-        s.occupation AS spouse_occupation, 
-        s.current_loc AS spouse_current_loc, 
-        s.marital_status AS spouse_marital_status, 
-        s.generation AS spouse_generation, 
-        s.is_alive AS spouse_is_alive,
-        s.photo_url AS spouse_photo_url, 
-        b2.name_en AS spouse_birth_star, 
-        m2.name_en AS spouse_malayalam_month
-      FROM 
-		kannambalam_family p
-      LEFT JOIN
-		kannambalam_family s ON s.id = p.spouse_id
-      LEFT JOIN
-		birth_star b1 ON b1.id = p.birth_star_id
-      LEFT JOIN
-		malayalam_month m1 ON m1.id = p.malayalam_month_id
-      LEFT JOIN
-		birth_star b2 ON b2.id = s.birth_star_id
-      LEFT JOIN
-		malayalam_month m2 ON m2.id = s.malayalam_month_id
-      WHERE
-		p.is_root = true
-      ORDER BY
-		p.order_id NULLS LAST, p.id
+        p.id, p.full_name, p.nick_name, p.gender, p.dob, p.dod, p.phone_no, p.alternate_phone,
+        p.occupation, p.current_loc, p.marital_status, p.generation, p.is_alive, p.photo_url,
+        b1.name_en AS birth_star, m1.name_en AS malayalam_month, 
+		
+        s.id AS spouse_id, s.full_name AS spouse_name, s.nick_name AS spouse_nick_name, 
+        s.gender AS spouse_gender, s.dob AS spouse_dob, s.dod AS spouse_dod, 
+        s.phone_no AS spouse_phone_no, s.alternate_phone AS spouse_alternate_phone, 
+        s.occupation AS spouse_occupation, s.current_loc AS spouse_current_loc, 
+        s.marital_status AS spouse_marital_status, s.generation AS spouse_generation, 
+        s.is_alive AS spouse_is_alive, s.photo_url AS spouse_photo_url, 
+		b2.name_en AS spouse_birth_star, m2.name_en AS spouse_malayalam_month
+		
+      FROM kannambalam_family p
+      LEFT JOIN kannambalam_family s ON s.id = p.spouse_id
+      LEFT JOIN birth_star b1 ON b1.id = p.birth_star_id
+      LEFT JOIN malayalam_month m1 ON m1.id = p.malayalam_month_id
+      LEFT JOIN birth_star b2 ON b2.id = s.birth_star_id
+      LEFT JOIN malayalam_month m2 ON m2.id = s.malayalam_month_id
+      WHERE p.is_root = true
+      ORDER BY p.order_id NULLS LAST, p.id
     `);
 
     res.json(rows);
@@ -89,34 +61,14 @@ app.get("/api/family/children/:id", async (req, res) => {
 
     const { rows } = await pool.query(`
       SELECT
-        k.id, 
-		k.full_name, 
-		k.nick_name, 
-		k.gender, 
-		k.dob, 
-		k.dod, 
-		k.phone_no, 
-		k.alternate_phone, 
-		k.occupation,
-        k.current_loc, 
-		k.marital_status, 
-		k.generation, 
-		k.is_alive, 
-		k.photo_url, 
-		b.name_en AS birth_star,
-        m.name_en AS malayalam_month, 
-		k.father_id, 
-		k.mother_id 
-      FROM
-		kannambalam_family k
-	  LEFT JOIN
-		birth_star b ON b.id=k.birth_star_id
-	  LEFT JOIN
-		malayalam_month m ON m.id=k.malayalam_month_id
-      WHERE
-		k.father_id = $1 OR k.mother_id = $1
-      ORDER BY
-		k.order_id NULLS LAST, k.id
+        k.id, k.full_name, k.nick_name, k.gender, k.dob, k.dod, k.phone_no, k.alternate_phone, 
+		k.occupation, k.current_loc, k.marital_status, k.generation, k.is_alive, k.photo_url, 
+		b.name_en AS birth_star, m.name_en AS malayalam_month, k.father_id, k.mother_id 
+      FROM kannambalam_family k
+	  LEFT JOIN birth_star b ON b.id=k.birth_star_id
+	  LEFT JOIN malayalam_month m ON m.id=k.malayalam_month_id
+      WHERE k.father_id = $1 OR k.mother_id = $1
+      ORDER BY k.order_id NULLS LAST, k.id
     `, [id]);
 
     res.json(rows);
