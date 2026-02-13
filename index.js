@@ -1,13 +1,15 @@
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const app = express();
 
 app.use(cors({
   origin: "*",
-  methods: ["GET"],
-  allowedHeaders: ["Content-Type"]
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json());
@@ -21,6 +23,132 @@ app.get("/", (req, res) => {
   res.send("Family Tree API is running 🚀 (auto-deployed)");
 });
 
+/* =========================
+   AUTH MIDDLEWARE
+========================= */
+function auth(req, res, next) {
+  const hdr = req.headers.authorization || "";
+  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
+  if (!token) return res.status(401).json({ msg: "No token" });
+
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch (e) {
+    return res.status(401).json({ msg: "Invalid token" });
+  }
+}
+
+/* =========================
+   AUTH APIs
+========================= */
+
+// Register
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const { full_name, email, phone_no, password, family_person_id } = req.body;
+
+    if (!full_name || !email || !password) {
+      return res.status(400).json({ msg: "Missing fields" });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    await pool.query(`
+      INSERT INTO app_users (full_name, email, phone_no, password_hash, family_person_id)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [full_name, email, phone_no || null, hash, family_person_id || null]);
+
+    res.json({ msg: "Registration submitted. Await admin approval." });
+  } catch (e) {
+    if (e.code === "23505") {
+      return res.status(409).json({ msg: "Email or phone already exists" });
+    }
+    console.error("Register error", e);
+    res.status(500).json({ msg: "Registration failed" });
+  }
+});
+
+// Login
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const r = await pool.query(
+      `SELECT id, full_name, password_hash, role, is_approved, family_person_id
+       FROM app_users WHERE email = $1`,
+      [email]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(401).json({ msg: "Invalid email or password" });
+    }
+
+    const u = r.rows[0];
+
+    if (!u.is_approved) {
+      return res.status(403).json({ msg: "Account pending admin approval" });
+    }
+
+    const ok = await bcrypt.compare(password, u.password_hash);
+    if (!ok) return res.status(401).json({ msg: "Invalid email or password" });
+
+    const token = jwt.sign(
+      { id: u.id, role: u.role, family_person_id: u.family_person_id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      token,
+      full_name: u.full_name,
+      role: u.role,
+      family_person_id: u.family_person_id
+    });
+  } catch (e) {
+    console.error("Login error", e);
+    res.status(500).json({ msg: "Login failed" });
+  }
+});
+
+/* =========================
+   ADMIN APIs
+========================= */
+
+app.get("/api/admin/pending-users", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ msg: "Forbidden" });
+  }
+
+  const { rows } = await pool.query(`
+    SELECT id, full_name, email, phone_no, family_person_id, eb_created_at
+    FROM app_users
+    WHERE is_approved = false
+    ORDER BY eb_created_at
+  `);
+
+  res.json(rows);
+});
+
+app.post("/api/admin/approve/:id", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ msg: "Forbidden" });
+  }
+
+  await pool.query(
+    `UPDATE app_users SET is_approved = true WHERE id = $1`,
+    [req.params.id]
+  );
+
+  res.json({ msg: "User approved" });
+});
+
+/* =========================
+   EXISTING FAMILY APIs
+========================= */
+
+// (Your existing routes unchanged below)
+
 app.get("/api/family/roots", async (req, res) => {
   try {
     const { rows } = await pool.query(`
@@ -28,15 +156,13 @@ app.get("/api/family/roots", async (req, res) => {
         p.id, p.full_name, p.nick_name, p.gender, p.dob, p.dod, p.phone_no, p.alternate_phone,
         p.occupation, p.current_loc, p.marital_status, p.generation, p.is_alive, p.photo_url,
         b1.name_en AS birth_star, m1.name_en AS malayalam_month, 
-		
         s.id AS spouse_id, s.full_name AS spouse_name, s.nick_name AS spouse_nick_name, 
         s.gender AS spouse_gender, s.dob AS spouse_dob, s.dod AS spouse_dod, 
         s.phone_no AS spouse_phone_no, s.alternate_phone AS spouse_alternate_phone, 
         s.occupation AS spouse_occupation, s.current_loc AS spouse_current_loc, 
         s.marital_status AS spouse_marital_status, s.generation AS spouse_generation, 
         s.is_alive AS spouse_is_alive, s.photo_url AS spouse_photo_url, 
-		b2.name_en AS spouse_birth_star, m2.name_en AS spouse_malayalam_month
-		
+        b2.name_en AS spouse_birth_star, m2.name_en AS spouse_malayalam_month
       FROM kannambalam_family p
       LEFT JOIN kannambalam_family s ON s.id = p.spouse_id
       LEFT JOIN birth_star b1 ON b1.id = p.birth_star_id
@@ -54,6 +180,7 @@ app.get("/api/family/roots", async (req, res) => {
   }
 });
 
+// (Keep the rest of your existing routes as-is...)
 
 app.get("/api/family/children/:id", async (req, res) => {
   try {
@@ -312,8 +439,9 @@ app.get("/api/family/lineage/:id", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
 
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
+
