@@ -3,8 +3,18 @@ const cors = require("cors");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-
 const app = express();
+const nodemailer = require("nodemailer");
+
+const mailer = nodemailer.createTransport({
+  host: "smtp.zeptomail.in",
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.ZEPTO_USER,   // "emailapikey"
+    pass: process.env.ZEPTO_PASS
+  }
+});
 
 app.use(cors({
   origin: "*",
@@ -43,7 +53,7 @@ function auth(req, res, next) {
    AUTH APIs
 ========================= */
 
-// Register (using member_id)
+// Register (using member_id) + notify admins
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { full_name, email, phone_no, password, member_id } = req.body;
@@ -52,7 +62,7 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(400).json({ msg: "Missing fields" });
     }
 
-    // 1. Resolve member_id → family_person_id (numeric)
+    // 1. Resolve member_id → family_person_id
     const famRes = await pool.query(
       `SELECT id FROM kannambalam_family WHERE member_id = $1`,
       [member_id]
@@ -78,12 +88,39 @@ app.post("/api/auth/register", async (req, res) => {
     const hash = await bcrypt.hash(password, 10);
 
     // 4. Insert user (pending approval)
-    await pool.query(`
-      INSERT INTO app_users (full_name, email, phone_no, password_hash, family_person_id)
-      VALUES ($1, $2, $3, $4, $5)
-    `, [full_name, email, phone_no || null, hash, familyPersonId]);
+    await pool.query(
+      `INSERT INTO app_users (full_name, email, phone_no, password_hash, family_person_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [full_name, email, phone_no || null, hash, familyPersonId]
+    );
+
+    // 5. Notify all approved admins (non-blocking)
+    try {
+      const admins = await pool.query(
+        `SELECT email FROM app_users WHERE role = 'admin' AND is_approved = true`
+      );
+
+      for (const a of admins.rows) {
+        await mailer.sendMail({
+          from: '"Kannambalam Family Tree" <noreply@kannambalam.com>',
+          to: a.email,
+          subject: "New user awaiting approval",
+          html: `
+            <h3>New Registration Pending Approval</h3>
+            <p><b>Name:</b> ${full_name}</p>
+            <p><b>Email:</b> ${email}</p>
+            <p><b>Member ID:</b> ${member_id}</p>
+            <p>Please login to the admin panel to approve this user.</p>
+          `,
+        });
+      }
+    } catch (mailErr) {
+      console.error("Admin email notification failed:", mailErr.message);
+      // Do NOT fail registration if email fails
+    }
 
     res.json({ msg: "Registration submitted. Await admin approval." });
+
   } catch (e) {
     if (e.code === "23505") {
       return res.status(409).json({ msg: "Email or phone already exists" });
