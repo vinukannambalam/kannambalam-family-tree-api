@@ -211,14 +211,17 @@ app.get("/api/family/roots", async (req, res) => {
       SELECT
         p.id, p.full_name, p.nick_name, p.gender, p.dob, p.dod, p.phone_no, p.alternate_phone,
         p.occupation, p.current_loc, p.marital_status, p.generation, p.is_alive, p.photo_url,
-        b1.name_ml AS birth_star, m1.name_ml AS malayalam_month, 
+        b1.name_ml AS birth_star, m1.name_ml AS malayalam_month, p.facebook_url, p.instagram_url,
+		p.whatsapp_no, p.linkedin_url, p.email,
         s.id AS spouse_id, s.full_name AS spouse_name, s.nick_name AS spouse_nick_name, 
         s.gender AS spouse_gender, s.dob AS spouse_dob, s.dod AS spouse_dod, 
         s.phone_no AS spouse_phone_no, s.alternate_phone AS spouse_alternate_phone, 
         s.occupation AS spouse_occupation, s.current_loc AS spouse_current_loc, 
         s.marital_status AS spouse_marital_status, s.generation AS spouse_generation, 
         s.is_alive AS spouse_is_alive, s.photo_url AS spouse_photo_url, 
-        b2.name_ml AS spouse_birth_star, m2.name_ml AS spouse_malayalam_month
+        b2.name_ml AS spouse_birth_star, m2.name_ml AS spouse_malayalam_month,
+		s.facebook_url AS spouse_facebook_url, s.instagram_url AS spouse_instagram_url, 
+		s.whatsapp_no AS spouse_whatsapp_no, s.linkedin_url AS spouse_linkedin_url, s.email AS spouse_email 
       FROM kannambalam_family p
       LEFT JOIN kannambalam_family s ON s.id = p.spouse_id
       LEFT JOIN birth_star b1 ON b1.id = p.birth_star_id
@@ -246,7 +249,8 @@ app.get("/api/family/children/:id", async (req, res) => {
       SELECT
         k.id, k.full_name, k.nick_name, k.gender, k.dob, k.dod, k.phone_no, k.alternate_phone, 
 		k.occupation, k.current_loc, k.marital_status, k.generation, k.is_alive, k.photo_url, 
-		b.name_ml AS birth_star, m.name_ml AS malayalam_month, k.father_id, k.mother_id 
+		b.name_ml AS birth_star, m.name_ml AS malayalam_month, k.father_id, k.mother_id,
+		k.facebook_url, k.instagram_url, k.whatsapp_no, k.linkedin_url, k.email,
       FROM kannambalam_family k
 	  LEFT JOIN birth_star b ON b.id=k.birth_star_id
 	  LEFT JOIN malayalam_month m ON m.id=k.malayalam_month_id
@@ -335,7 +339,12 @@ app.get("/api/family/search", async (req, res) => {
     k.is_alive, 
     k.photo_url, 
     b.name_ml AS birth_star,
-    m.name_ml AS malayalam_month
+    m.name_ml AS malayalam_month,
+	k.facebook_url, 
+	k.instagram_url, 
+	k.whatsapp_no, 
+	k.linkedin_url,
+	k.email
   FROM
 	kannambalam_family k
   LEFT JOIN
@@ -380,6 +389,11 @@ app.get("/api/family/family", async (req, res) => {
     p.generation, 
     p.is_alive, 
     p.photo_url,
+	p.facebook_url, 
+	p.instagram_url, 
+	p.whatsapp_no, 
+	p.linkedin_url,
+	p.email,
     b1.name_ml AS birth_star, 
     m1.name_ml AS malayalam_month, 
     s.id AS spouse_id, 
@@ -396,8 +410,13 @@ app.get("/api/family/family", async (req, res) => {
     s.generation AS spouse_generation, 
     s.is_alive AS spouse_is_alive, 
     s.photo_url AS spouse_photo_url, 
+	s.facebook_url AS spouse_facebook_url, 
+	s.instagram_url AS spouse_instagram_url, 
+	s.whatsapp_no AS spouse_whatsapp_no, 
+	s.linkedin_url AS spouse_linkedin_url,
     b2.name_ml AS spouse_birth_star, 
-    m2.name_ml AS spouse_malayalam_month
+    m2.name_ml AS spouse_malayalam_month,
+	s.email AS spouse_email
   FROM
 	kannambalam_family p
   LEFT JOIN
@@ -440,7 +459,12 @@ app.get("/api/family/family", async (req, res) => {
     b.name_ml AS birth_star,
     m.name_ml AS malayalam_month, 
     k.father_id, 
-    k.mother_id 
+    k.mother_id,
+	k.facebook_url, 
+	k.instagram_url, 
+	k.whatsapp_no, 
+	k.linkedin_url,
+	k.email
   FROM kannambalam_family k
   LEFT JOIN
 	birth_star b ON b.id = k.birth_star_id
