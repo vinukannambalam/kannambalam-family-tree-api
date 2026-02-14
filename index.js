@@ -225,6 +225,63 @@ app.post("/api/admin/approve/:id", auth, async (req, res) => {
   res.json({ msg: "User approved" });
 });
 
+app.post("/api/admin/reject/:id", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ msg: "Forbidden" });
+  }
+
+  const { reason } = req.body;
+
+  if (!reason || reason.trim().length < 5) {
+    return res.status(400).json({ msg: "Rejection reason is required" });
+  }
+
+  try {
+    // 1. Fetch user details
+    const r = await pool.query(
+      `SELECT email, full_name 
+       FROM app_users 
+       WHERE id = $1 AND is_approved = false`,
+      [req.params.id]
+    );
+
+    if (r.rowCount === 0) {
+      return res.status(404).json({ msg: "User not found or already approved" });
+    }
+
+    const { email, full_name } = r.rows[0];
+
+    // 2. Delete user
+    await pool.query(`DELETE FROM app_users WHERE id = $1`, [req.params.id]);
+
+    // 3. Send rejection email (non-blocking)
+    try {
+      await mailer.sendMail({
+        from: '"Kannambalam Family Tree" <noreply@kannambalam.com>',
+        to: email,
+        subject: "Your registration was rejected",
+        html: `
+          <h3>Registration Rejected</h3>
+          <p>Hi ${full_name},</p>
+          <p>Your registration could not be approved.</p>
+          <p><b>Reason:</b> ${reason}</p>
+          <p>You may register again with correct details.</p>
+          <p>— Kannambalam Family Tree Team</p>
+        `
+      });
+    } catch (mailErr) {
+      console.error("Rejection email failed:", mailErr);
+    }
+
+    res.json({ msg: "User rejected and deleted. Email sent." });
+
+  } catch (e) {
+    console.error("Reject user error", e);
+    res.status(500).json({ msg: "Reject failed" });
+  }
+});
+
+
 // Unregistered family members for registration dropdown
 app.get("/api/family/unregistered-members", async (req, res) => {
   try {
