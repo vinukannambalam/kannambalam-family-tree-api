@@ -672,6 +672,62 @@ app.get("/api/family/lineage/:id", async (req, res) => {
   }
 });
 
+// Edit User Profile
+
+app.post("/api/user/profile", auth, async (req, res) => {
+  const {
+    phone_no,
+    whatsapp_no,
+    gender,
+    dob,
+    alternate_phone,
+    occupation,
+    current_loc,
+    marital_status,
+    nick_name,
+    photo_url,
+    facebook_url,
+    instagram_url,
+    linkedin_url,
+    email  // profile email only (not login email)
+  } = req.body;
+
+  const userId = req.user.id;
+  const familyPersonId = req.user.family_person_id;
+
+  await pool.query(`
+    UPDATE app_users
+    SET phone_no = $1, whatsapp_no = $2
+    WHERE id = $3
+  `, [phone_no, whatsapp_no, userId]);
+
+  await pool.query(`
+    UPDATE kannambalam_family
+    SET 
+      gender = $1,
+      dob = $2,
+      alternate_phone = $3,
+      occupation = $4,
+      current_loc = $5,
+      marital_status = $6,
+      nick_name = $7,
+      photo_url = $8,
+      whatsapp_no = $9,
+      facebook_url = $10,
+      instagram_url = $11,
+      linkedin_url = $12,
+      email = $13
+    WHERE id = $14
+  `, [
+    gender, dob, alternate_phone, occupation, current_loc,
+    marital_status, nick_name, photo_url, whatsapp_no,
+    facebook_url, instagram_url, linkedin_url, email,
+    familyPersonId
+  ]);
+
+  res.json({ msg: "Profile updated" });
+});
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
