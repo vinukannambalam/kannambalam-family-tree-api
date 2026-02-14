@@ -188,8 +188,8 @@ app.get("/api/family/unregistered-members", async (req, res) => {
         SELECT family_person_id 
         FROM app_users 
         WHERE family_person_id IS NOT NULL
-      )
-      ORDER BY k.generation, k.full_name
+      ) AND k.is_alive=true
+      ORDER BY k.member_id
     `);
 
     res.json(rows);
