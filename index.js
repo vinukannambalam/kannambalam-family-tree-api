@@ -217,13 +217,58 @@ app.post("/api/admin/approve/:id", auth, async (req, res) => {
     return res.status(403).json({ msg: "Forbidden" });
   }
 
-  await pool.query(
-    `UPDATE app_users SET is_approved = true WHERE id = $1`,
-    [req.params.id]
-  );
+  try {
+    // 1. Get user details
+    const r = await pool.query(
+      `SELECT email, full_name 
+       FROM app_users 
+       WHERE id = $1 AND is_approved = false`,
+      [req.params.id]
+    );
 
-  res.json({ msg: "User approved" });
+    if (r.rowCount === 0) {
+      return res.status(404).json({ msg: "User not found or already approved" });
+    }
+
+    const { email, full_name } = r.rows[0];
+
+    // 2. Approve user
+    await pool.query(
+      `UPDATE app_users SET is_approved = true WHERE id = $1`,
+      [req.params.id]
+    );
+
+    // 3. Send approval email (non-blocking)
+    try {
+      await mailer.sendMail({
+        from: '"Kannambalam Family Tree" <noreply@kannambalam.com>',
+        to: email,
+        subject: "Your account is approved 🎉",
+        html: `
+          <h3>Account Approved</h3>
+          <p>Hi ${full_name},</p>
+          <p>Your account has been approved by the admin.</p>
+          <p>You can now log in and access the Kannambalam Family Tree.</p>
+          <p><a href="https://kannambalam.com" target="_blank">
+            👉 Open Kannambalam Family Tree
+          </a></p>
+          <br/>
+          <p>— Kannambalam Family Tree Team</p>
+        `
+      });
+    } catch (mailErr) {
+      console.error("Approval email failed:", mailErr.message);
+      // Don't fail approval if mail fails
+    }
+
+    res.json({ msg: "User approved and notified by email" });
+
+  } catch (e) {
+    console.error("Approve user error", e);
+    res.status(500).json({ msg: "Approval failed" });
+  }
 });
+
 
 app.post("/api/admin/reject/:id", auth, async (req, res) => {
   if (req.user.role !== "admin") {
