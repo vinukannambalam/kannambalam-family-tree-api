@@ -43,21 +43,45 @@ function auth(req, res, next) {
    AUTH APIs
 ========================= */
 
-// Register
+// Register (using member_id)
 app.post("/api/auth/register", async (req, res) => {
   try {
-    const { full_name, email, phone_no, password, family_person_id } = req.body;
+    const { full_name, email, phone_no, password, member_id } = req.body;
 
-    if (!full_name || !email || !password) {
+    if (!full_name || !email || !password || !member_id) {
       return res.status(400).json({ msg: "Missing fields" });
     }
 
+    // 1. Resolve member_id → family_person_id (numeric)
+    const famRes = await pool.query(
+      `SELECT id FROM kannambalam_family WHERE member_id = $1`,
+      [member_id]
+    );
+
+    if (famRes.rowCount === 0) {
+      return res.status(400).json({ msg: "Invalid member selected" });
+    }
+
+    const familyPersonId = famRes.rows[0].id;
+
+    // 2. Check if already registered
+    const exists = await pool.query(
+      `SELECT 1 FROM app_users WHERE family_person_id = $1`,
+      [familyPersonId]
+    );
+
+    if (exists.rowCount > 0) {
+      return res.status(409).json({ msg: "This family member is already registered" });
+    }
+
+    // 3. Hash password
     const hash = await bcrypt.hash(password, 10);
 
+    // 4. Insert user (pending approval)
     await pool.query(`
       INSERT INTO app_users (full_name, email, phone_no, password_hash, family_person_id)
       VALUES ($1, $2, $3, $4, $5)
-    `, [full_name, email, phone_no || null, hash, family_person_id || null]);
+    `, [full_name, email, phone_no || null, hash, familyPersonId]);
 
     res.json({ msg: "Registration submitted. Await admin approval." });
   } catch (e) {
@@ -69,14 +93,19 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
+
 // Login
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const r = await pool.query(
-      `SELECT id, full_name, password_hash, role, is_approved, family_person_id
-       FROM app_users WHERE email = $1`,
+      `SELECT 
+         u.id, u.full_name, u.password_hash, u.role, u.is_approved, u.family_person_id,
+         k.member_id
+       FROM app_users u
+       LEFT JOIN kannambalam_family k ON k.id = u.family_person_id
+       WHERE u.email = $1`,
       [email]
     );
 
@@ -103,13 +132,15 @@ app.post("/api/auth/login", async (req, res) => {
       token,
       full_name: u.full_name,
       role: u.role,
-      family_person_id: u.family_person_id
+      family_person_id: u.family_person_id,
+      member_id: u.member_id
     });
   } catch (e) {
     console.error("Login error", e);
     res.status(500).json({ msg: "Login failed" });
   }
 });
+
 
 /* =========================
    ADMIN APIs
@@ -143,11 +174,36 @@ app.post("/api/admin/approve/:id", auth, async (req, res) => {
   res.json({ msg: "User approved" });
 });
 
+// Unregistered family members for registration dropdown
+app.get("/api/family/unregistered-members", async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT 
+        k.id,
+        k.member_id,
+        k.full_name,
+        k.generation
+      FROM kannambalam_family k
+      WHERE k.id NOT IN (
+        SELECT family_person_id 
+        FROM app_users 
+        WHERE family_person_id IS NOT NULL
+      )
+      ORDER BY k.generation, k.full_name
+    `);
+
+    res.json(rows);
+  } catch (e) {
+    console.error("Unregistered members error", e);
+    res.status(500).json({ msg: "Failed to load members" });
+  }
+});
+
+
 /* =========================
    EXISTING FAMILY APIs
 ========================= */
 
-// (Your existing routes unchanged below)
 
 app.get("/api/family/roots", async (req, res) => {
   try {
@@ -155,14 +211,14 @@ app.get("/api/family/roots", async (req, res) => {
       SELECT
         p.id, p.full_name, p.nick_name, p.gender, p.dob, p.dod, p.phone_no, p.alternate_phone,
         p.occupation, p.current_loc, p.marital_status, p.generation, p.is_alive, p.photo_url,
-        b1.name_en AS birth_star, m1.name_en AS malayalam_month, 
+        b1.name_ml AS birth_star, m1.name_ml AS malayalam_month, 
         s.id AS spouse_id, s.full_name AS spouse_name, s.nick_name AS spouse_nick_name, 
         s.gender AS spouse_gender, s.dob AS spouse_dob, s.dod AS spouse_dod, 
         s.phone_no AS spouse_phone_no, s.alternate_phone AS spouse_alternate_phone, 
         s.occupation AS spouse_occupation, s.current_loc AS spouse_current_loc, 
         s.marital_status AS spouse_marital_status, s.generation AS spouse_generation, 
         s.is_alive AS spouse_is_alive, s.photo_url AS spouse_photo_url, 
-        b2.name_en AS spouse_birth_star, m2.name_en AS spouse_malayalam_month
+        b2.name_ml AS spouse_birth_star, m2.name_ml AS spouse_malayalam_month
       FROM kannambalam_family p
       LEFT JOIN kannambalam_family s ON s.id = p.spouse_id
       LEFT JOIN birth_star b1 ON b1.id = p.birth_star_id
@@ -190,7 +246,7 @@ app.get("/api/family/children/:id", async (req, res) => {
       SELECT
         k.id, k.full_name, k.nick_name, k.gender, k.dob, k.dod, k.phone_no, k.alternate_phone, 
 		k.occupation, k.current_loc, k.marital_status, k.generation, k.is_alive, k.photo_url, 
-		b.name_en AS birth_star, m.name_en AS malayalam_month, k.father_id, k.mother_id 
+		b.name_ml AS birth_star, m.name_ml AS malayalam_month, k.father_id, k.mother_id 
       FROM kannambalam_family k
 	  LEFT JOIN birth_star b ON b.id=k.birth_star_id
 	  LEFT JOIN malayalam_month m ON m.id=k.malayalam_month_id
@@ -278,7 +334,7 @@ app.get("/api/family/search", async (req, res) => {
     k.generation, 
     k.is_alive, 
     k.photo_url, 
-    b.name_en AS birth_star,
+    b.name_ml AS birth_star,
     m.name_ml AS malayalam_month
   FROM
 	kannambalam_family k
@@ -324,7 +380,7 @@ app.get("/api/family/family", async (req, res) => {
     p.generation, 
     p.is_alive, 
     p.photo_url,
-    b1.name_en AS birth_star, 
+    b1.name_ml AS birth_star, 
     m1.name_ml AS malayalam_month, 
     s.id AS spouse_id, 
     s.full_name AS spouse_name, 
@@ -340,7 +396,7 @@ app.get("/api/family/family", async (req, res) => {
     s.generation AS spouse_generation, 
     s.is_alive AS spouse_is_alive, 
     s.photo_url AS spouse_photo_url, 
-    b2.name_en AS spouse_birth_star, 
+    b2.name_ml AS spouse_birth_star, 
     m2.name_ml AS spouse_malayalam_month
   FROM
 	kannambalam_family p
@@ -381,7 +437,7 @@ app.get("/api/family/family", async (req, res) => {
     k.generation, 
     k.is_alive, 
     k.photo_url, 
-    b.name_en AS birth_star,
+    b.name_ml AS birth_star,
     m.name_ml AS malayalam_month, 
     k.father_id, 
     k.mother_id 
