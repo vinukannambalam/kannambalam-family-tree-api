@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
@@ -7,11 +8,11 @@ const app = express();
 const nodemailer = require("nodemailer");
 
 const mailer = nodemailer.createTransport({
-  host: "smtp.zeptomail.in",
-  port: 587,
+  host: process.env.ZEPTO_HOST,
+  port: Number(process.env.ZEPTO_PORT || 587),
   secure: false,
   auth: {
-    user: process.env.ZEPTO_USER,   // "emailapikey"
+    user: process.env.ZEPTO_USER,
     pass: process.env.ZEPTO_PASS
   }
 });
@@ -61,6 +62,10 @@ app.post("/api/auth/register", async (req, res) => {
     if (!full_name || !email || !password || !member_id) {
       return res.status(400).json({ msg: "Missing fields" });
     }
+	if (!/^\S+@\S+\.\S+$/.test(email)) {
+		return res.status(400).json({ msg: "Invalid email format" });
+	}
+
 
     // 1. Resolve member_id → family_person_id
     const famRes = await pool.query(
@@ -86,6 +91,14 @@ app.post("/api/auth/register", async (req, res) => {
 
     // 3. Hash password
     const hash = await bcrypt.hash(password, 10);
+	const emailExists = await pool.query(
+		`SELECT 1 FROM app_users WHERE email = $1`,
+		[email]
+		);
+
+	if (emailExists.rowCount > 0) {
+		return res.status(409).json({ msg: "Email already registered" });
+	}
 
     // 4. Insert user (pending approval)
     await pool.query(
@@ -95,29 +108,30 @@ app.post("/api/auth/register", async (req, res) => {
     );
 
     // 5. Notify all approved admins (non-blocking)
-    try {
-      const admins = await pool.query(
-        `SELECT email FROM app_users WHERE role = 'admin' AND is_approved = true`
-      );
+		try {
+		const admins = await pool.query(
+			`SELECT email FROM app_users WHERE role = 'admin' AND is_approved = true`
+			);
 
-      for (const a of admins.rows) {
-        await mailer.sendMail({
-          from: '"Kannambalam Family Tree" <noreply@kannambalam.com>',
-          to: a.email,
-          subject: "New user awaiting approval",
-          html: `
-            <h3>New Registration Pending Approval</h3>
-            <p><b>Name:</b> ${full_name}</p>
-            <p><b>Email:</b> ${email}</p>
-            <p><b>Member ID:</b> ${member_id}</p>
-            <p>Please login to the admin panel to approve this user.</p>
-          `,
-        });
-      }
-    } catch (mailErr) {
-      console.error("Admin email notification failed:", mailErr.message);
-      // Do NOT fail registration if email fails
-    }
+		if (admins.rowCount > 0) {
+		const to = admins.rows.map(a => a.email).join(",");
+
+		await mailer.sendMail({
+		from: '"Kannambalam Family Tree" <noreply@kannambalam.com>',
+		to,
+		subject: "New user awaiting approval",
+		html: `
+        <h3>New Registration Pending Approval</h3>
+        <p><b>Name:</b> ${full_name}</p>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Member ID:</b> ${member_id}</p>
+        <p>Please login to the admin panel to approve this user.</p>
+      `
+		});
+	}
+	} catch (mailErr) {
+		console.error("Admin email notification failed:", mailErr.message);
+	}	console.error(mailErr); // stack + details
 
     res.json({ msg: "Registration submitted. Await admin approval." });
 
@@ -287,7 +301,7 @@ app.get("/api/family/children/:id", async (req, res) => {
         k.id, k.full_name, k.nick_name, k.gender, k.dob, k.dod, k.phone_no, k.alternate_phone, 
 		k.occupation, k.current_loc, k.marital_status, k.generation, k.is_alive, k.photo_url, 
 		b.name_ml AS birth_star, m.name_ml AS malayalam_month, k.father_id, k.mother_id,
-		k.facebook_url, k.instagram_url, k.whatsapp_no, k.linkedin_url, k.email,
+		k.facebook_url, k.instagram_url, k.whatsapp_no, k.linkedin_url, k.email
       FROM kannambalam_family k
 	  LEFT JOIN birth_star b ON b.id=k.birth_star_id
 	  LEFT JOIN malayalam_month m ON m.id=k.malayalam_month_id
