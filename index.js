@@ -131,7 +131,7 @@ app.post("/api/auth/register", async (req, res) => {
 	}
 	} catch (mailErr) {
 		console.error("Admin email notification failed:", mailErr.message);
-	}	console.error(mailErr); // stack + details
+	}
 
     res.json({ msg: "Registration submitted. Await admin approval." });
 
