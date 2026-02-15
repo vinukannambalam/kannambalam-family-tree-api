@@ -132,6 +132,7 @@ app.post("/api/auth/register", async (req, res) => {
 	} catch (mailErr) {
 		console.error("Admin email notification failed:", mailErr.message);
 	}
+	}	
 
     res.json({ msg: "Registration submitted. Await admin approval." });
 
@@ -259,7 +260,7 @@ app.post("/api/admin/approve/:id", auth, async (req, res) => {
     } catch (mailErr) {
       console.error("Approval email failed:", mailErr.message);
       // Don't fail approval if mail fails
-    }
+    } 
 
     res.json({ msg: "User approved and notified by email" });
 
@@ -425,11 +426,34 @@ app.get("/api/family/search", async (req, res) => {
     const alive = (req.query.alive || "all").toLowerCase();
     const gen = req.query.gen ? parseInt(req.query.gen, 10) : null;
 
+    const name = (req.query.name || "").trim();
+    const star = (req.query.star || "").trim();
+    const month = (req.query.month || "").trim();
+
     let where = [];
     let params = [];
     let i = 1;
 
-    // Text search
+    // Partial filters (preferred)
+    if (name) {
+      where.push(`k.full_name ILIKE '%' || $${i} || '%'`);
+      params.push(name);
+      i++;
+    }
+
+    if (star) {
+      where.push(`b.name_en ILIKE '%' || $${i} || '%'`);
+      params.push(star);
+      i++;
+    }
+
+    if (month) {
+      where.push(`m.name_en ILIKE '%' || $${i} || '%'`);
+      params.push(month);
+      i++;
+    }
+
+    // Legacy text search (optional)
     if (q) {
       if (field === "name") {
         where.push(`k.full_name ILIKE '%' || $${i} || '%'`);
@@ -454,61 +478,75 @@ app.get("/api/family/search", async (req, res) => {
       }
     }
 
-    // Alive filter
-    if (alive === "true") {
+    // Alive filter (match React values)
+    if (alive === "alive") {
       where.push(`k.is_alive = true`);
-    } else if (alive === "false") {
+    } else if (alive === "dead") {
       where.push(`k.is_alive = false`);
     }
 
-    // Generation filter
+    // Generation filter (exact)
     if (Number.isInteger(gen)) {
       where.push(`k.generation = $${i}`);
       params.push(gen);
       i++;
     }
 
-    // If no filters at all → return empty (prevent full table scan)
-    if (!q && alive === "all" && !Number.isInteger(gen)) {
+    // Prevent full table scan
+    const hasAnyFilter =
+      q ||
+      name ||
+      star ||
+      month ||
+      alive !== "all" ||
+      Number.isInteger(gen);
+
+    if (!hasAnyFilter) {
       return res.json([]);
     }
 
     const whereSql = where.length ? "WHERE " + where.join(" AND ") : "";
+	console.log("SEARCH WHERE:", whereSql);
+	console.log("SEARCH PARAMS:", params);
 
-    const { rows } = await pool.query(`
-  SELECT
-    k.id, 
-    k.full_name, 
-    k.nick_name, 
-    k.gender, 
-    k.dob, 
-    k.dod, 
-    k.phone_no, 
-    k.alternate_phone, 
-    k.occupation,
-    k.current_loc, 
-    k.marital_status, 
-    k.generation, 
-    k.is_alive, 
-    k.photo_url, 
-    b.name_ml AS birth_star,
-    m.name_ml AS malayalam_month,
-	k.facebook_url, 
-	k.instagram_url, 
-	k.whatsapp_no, 
-	k.linkedin_url,
-	k.email
-  FROM
-	kannambalam_family k
-  LEFT JOIN
-	birth_star b ON b.id = k.birth_star_id
-  LEFT JOIN
-	malayalam_month m ON m.id = k.malayalam_month_id
-  ${whereSql}
-  ORDER BY
-	k.full_name
-  LIMIT 250
-`, params);
+
+    const { rows } = await pool.query(
+      `
+      SELECT
+        k.id, 
+        k.full_name, 
+        k.nick_name, 
+        k.gender, 
+        k.dob, 
+        k.dod, 
+        k.phone_no, 
+        k.alternate_phone, 
+        k.occupation,
+        k.current_loc, 
+        k.marital_status, 
+        k.generation, 
+        k.is_alive, 
+        k.photo_url, 
+        b.name_ml AS birth_star,
+        m.name_ml AS malayalam_month,
+        k.facebook_url, 
+        k.instagram_url, 
+        k.whatsapp_no, 
+        k.linkedin_url,
+        k.email
+      FROM
+        kannambalam_family k
+      LEFT JOIN
+        birth_star b ON b.id = k.birth_star_id
+      LEFT JOIN
+        malayalam_month m ON m.id = k.malayalam_month_id
+      ${whereSql}
+      ORDER BY
+        k.full_name
+      LIMIT 250
+    `,
+      params
+    );
 
     res.json(rows);
   } catch (err) {
@@ -727,6 +765,33 @@ app.post("/api/user/profile", auth, async (req, res) => {
 
   res.json({ msg: "Profile updated" });
 });
+
+// Profile Load API
+
+app.get("/api/user/profile", auth, async (req, res) => {
+  const userId = req.user.id;
+  const familyPersonId = req.user.family_person_id;
+
+  const user = await pool.query(`
+    SELECT phone_no, whatsapp_no 
+    FROM app_users 
+    WHERE id = $1
+  `, [userId]);
+
+  const fam = await pool.query(`
+    SELECT gender, dob, phone_no, alternate_phone, occupation, current_loc,
+           marital_status, nick_name, photo_url, whatsapp_no,
+           facebook_url, instagram_url, linkedin_url, email
+    FROM kannambalam_family
+    WHERE id = $1
+  `, [familyPersonId]);
+
+  res.json({
+    ...user.rows[0],
+    ...fam.rows[0]
+  });
+});
+
 
 
 const PORT = process.env.PORT || 3000;
