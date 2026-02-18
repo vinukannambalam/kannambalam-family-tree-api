@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const { Pool } = require("pg");
 
+
 const app = express();
 app.use(cors({ origin: "*", methods: ["GET", "POST", "PUT", "DELETE"] }));
 app.use(express.json());
@@ -60,8 +61,6 @@ app.get("/api/family/roots", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch roots" });
   }
 });
-
-
 
 app.get("/api/family/children/:id", async (req, res) => {
   try {
@@ -129,9 +128,6 @@ app.get("/api/family/children/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch children" });
   }
 });
-
-
-// index.js (Express API)
 
 app.get("/api/family/node/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
@@ -259,6 +255,6 @@ app.get("/api/family/node/:id", async (req, res) => {
 
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log("Minimal API running on port " + PORT);
 });
